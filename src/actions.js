@@ -1,0 +1,49 @@
+import { useStore, clean } from './store'
+import { canvasApi } from './CanvasView'
+import { ask } from './dialogs'
+
+export async function save() {
+  const s = useStore.getState(), p = s.plan(); if (!p || !canvasApi.exportBlob) return
+  if (s.draftPathId) s.finishPath()
+  let name = clean(s.fname.trim() || 'releve'); if (!name.toLowerCase().endsWith('.png')) name += '.png'
+  const blob = await canvasApi.exportBlob()
+  let ok = false
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Image PNG', accept: { 'image/png': ['.png'] } }] })
+      const w = await h.createWritable(); await w.write(blob); await w.close(); ok = true; name = h.name
+    } catch (e) { if (e.name === 'AbortError') return }
+  }
+  if (!ok) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  }
+  ask.toast(`Enregistré : ${name}`, { description: `${p.marks.length} place${p.marks.length > 1 ? 's' : ''} occupée${p.marks.length > 1 ? 's' : ''}` })
+  if (s.autoClear) { s.clear(['marks']); s.select(null) }
+}
+
+export function clearMarks() {
+  const s = useStore.getState(), p = s.plan()
+  if (!p?.marks.length) return ask.toast('Aucun X à effacer')
+  const n = p.marks.length; s.clear(['marks']); s.select(null)
+  ask.toast(`${n} X effacé${n > 1 ? 's' : ''}`, { action: { label: 'Annuler', onClick: () => useStore.getState().undo() } })
+}
+export function clearShapes() {
+  const s = useStore.getState(); if (s.draftPathId) s.finishPath()
+  const p = s.plan()
+  if (!p?.shapes.length) return ask.toast('Aucun dessin à effacer')
+  s.clear(['shapes']); s.select(null)
+  ask.toast('Rectangles et circuits effacés', { action: { label: 'Annuler', onClick: () => useStore.getState().undo() } })
+}
+export async function clearAll() {
+  const s = useStore.getState(); if (s.draftPathId) s.finishPath()
+  const p = s.plan()
+  if (!p || (!p.marks.length && !p.texts.length && !p.shapes.length)) return ask.toast('Rien à effacer')
+  const ok = await ask.confirm({ title: 'Tout effacer ?', description: `Tous les X, textes, rectangles et circuits de « ${p.name} » seront retirés. Vous pourrez annuler avec Ctrl+Z.`, ok: 'Tout effacer', danger: true })
+  if (ok) { s.clear(['marks', 'texts', 'shapes']); s.select(null) }
+}
+export function stepTextSize(dir) {
+  const s = useStore.getState(), v = s.tStyle.size
+  if (s.selected) s.snapshot()
+  s.setStyle('tStyle', { size: Math.max(8, Math.min(400, v + dir * Math.max(2, Math.round(v * 0.1)))) })
+}

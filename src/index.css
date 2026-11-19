@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-sign: var(--sign);
+  --color-stage: var(--stage);
+  --color-stage-dot: var(--stage-dot);
+}
+
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #eef2f8;
+  --line: #e2e7f0;
+  --line-strong: #cfd7e4;
+  --fg: #0f1f3d;
+  --fg-2: #3c4b69;
+  --muted: #6b7891;
+  --primary: #0f1f3d;
+  --primary-fg: #ffffff;
+  --primary-hover: #1a3060;
+  --accent: #2f62e8;
+  --accent-soft: rgba(47, 98, 232, 0.1);
+  --danger: #c93a2f;
+  --danger-soft: rgba(201, 58, 47, 0.08);
+  --sign: #0f2a5c;
+  --stage: #e9edf4;
+  --stage-dot: #d3dae6;
+  --shadow-float: 0 1px 2px rgba(15, 31, 61, 0.06), 0 8px 28px -6px rgba(15, 31, 61, 0.16);
+  color-scheme: light;
+}
+.dark {
+  --bg: #070e1c;
+  --surface: #0c172d;
+  --raised: #12203c;
+  --sunken: #0a1426;
+  --line: #1b2a48;
+  --line-strong: #263a60;
+  --fg: #e6ecf7;
+  --fg-2: #b7c3da;
+  --muted: #7d8cab;
+  --primary: #dfe7fb;
+  --primary-fg: #0b1730;
+  --primary-hover: #ffffff;
+  --accent: #6e95ff;
+  --accent-soft: rgba(110, 149, 255, 0.14);
+  --danger: #ff7d72;
+  --danger-soft: rgba(255, 125, 114, 0.1);
+  --sign: #173a7a;
+  --stage: #050b17;
+  --stage-dot: #142140;
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 32px -6px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+}
+.theme-anim, .theme-anim * { transition: background-color .3s ease, border-color .3s ease, color .2s ease !important; }
+.shadow-float { box-shadow: var(--shadow-float); }
+.stage-grid {
+  background-color: var(--stage);
+  background-image: radial-gradient(var(--stage-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=number]::-webkit-inner-spin-button { opacity: .4; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+@keyframes tipIn { from { opacity: 0; transform: translateY(2px); } }
