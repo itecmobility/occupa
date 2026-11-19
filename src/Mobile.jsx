@@ -21,16 +21,16 @@ export function BottomBar() {
             <button key={t.id} id={t.dom} onClick={() => setMode(t.id)} aria-pressed={on} className={cn(btn, on ? 'text-primary-fg' : 'text-fg-2 active:bg-sunken')}>
               {on && <motion.span layoutId="bottom-active" className="absolute inset-0.5 rounded-xl bg-primary" transition={{ type: 'spring', stiffness: 520, damping: 38 }} />}
               <t.icon size={21} strokeWidth={t.id === 'mark' ? 2.6 : 2} className="relative" />
-              <span className="relative truncate">{t.label}</span>
+              <span className="relative truncate max-[420px]:hidden">{t.label}</span>
             </button>
           )
         })}
         <div className="my-2 w-px shrink-0 bg-line" />
         <button id="undo" onClick={() => useStore.getState().undo()} disabled={!canUndo} aria-label="Annuler" className={cn(btn, 'max-w-14 text-fg-2 active:bg-sunken disabled:opacity-35')}>
-          <Undo2 size={21} /><span>Annuler</span>
+          <Undo2 size={21} /><span className="max-[420px]:hidden">Annuler</span>
         </button>
         <button id="openSheet" onClick={() => useStore.setState({ sheetOpen: !sheetOpen })} aria-expanded={sheetOpen} className={cn(btn, 'max-w-16', sheetOpen ? 'text-accent' : 'text-fg-2 active:bg-sunken')}>
-          <SlidersHorizontal size={21} /><span>Réglages</span>
+          <SlidersHorizontal size={21} /><span className="max-[420px]:hidden">Réglages</span>
         </button>
       </div>
     </nav>

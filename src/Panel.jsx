@@ -14,6 +14,8 @@ const CTX = {
   textSel: ['Texte sélectionné', 'Les réglages s\'appliquent à ce texte. Tirez la poignée du coin pour la taille, double-cliquez pour le réécrire.'],
   rect: ['Rectangle', 'Glissez sur le plan pour entourer des places.'],
   rectSel: ['Rectangle sélectionné', 'Les réglages s\'appliquent à ce rectangle. Tirez les poignées pour l\'agrandir ou le réduire, glissez-le en mode Déplacer, Suppr pour le retirer.'],
+  line: ['Ligne', 'Glissez pour tracer une ligne droite. Ses extrémités s\'accrochent aux points existants. Avec la touche Maj, la ligne suit des angles de 45°.'],
+  lineSel: ['Ligne sélectionnée', 'Les réglages s\'appliquent à cette ligne. Tirez une extrémité pour l\'ajuster, glissez la ligne en mode Déplacer, Suppr pour la retirer.'],
   path: ['Circuit', 'Cliquez chaque point. Un nouveau circuit s\'accroche aux points existants. Double-clic, Entrée ou clic droit pour terminer.'],
   pathSel: ['Circuit sélectionné', 'Les réglages s\'appliquent à ce circuit. Glissez pour le déplacer, Suppr pour le retirer.'],
   erase: ['Effaceur', 'Peignez en blanc sur le plan pour faire disparaître des places ou des éléments du dessin d\'origine. Ctrl+Z annule le dernier trait.'],
@@ -90,7 +92,7 @@ export default function Panel({ variant = 'side' }) {
             </>
           )}
 
-          {(k === 'rect' || k === 'path') && (
+          {(k === 'rect' || k === 'path' || k === 'line') && (
             <>
               <Field label="Couleur"><ColorField id="dColor" value={d.color} swatches={SW_D} onChange={(c) => setStyle('dStyle', { color: c })} /></Field>
               <Field label="Épaisseur du trait"><div onPointerDownCapture={snapIfSel}><SizeField id="dWidth" value={d.width} min={1} max={40} onChange={(v) => setStyle('dStyle', { width: v })} /></div></Field>
@@ -98,7 +100,7 @@ export default function Panel({ variant = 'side' }) {
               <div className="flex flex-wrap gap-2">
                 <Toggle id="dDash" icon={SquareDashed} on={d.dash} onClick={() => { snapIfSel(); setStyle('dStyle', { dash: !d.dash }) }}>Pointillés</Toggle>
                 {k === 'rect' && <Toggle id="dFill" icon={PaintBucket} on={d.fill} onClick={() => { snapIfSel(); setStyle('dStyle', { fill: !d.fill }) }}>Remplissage</Toggle>}
-                {k === 'path' && <Toggle id="dArrow" icon={MoveRight} on={d.arrow} onClick={() => { snapIfSel(); setStyle('dStyle', { arrow: !d.arrow }) }}>Flèche</Toggle>}
+                {(k === 'path' || k === 'line') && <Toggle id="dArrow" icon={MoveRight} on={d.arrow} onClick={() => { snapIfSel(); setStyle('dStyle', { arrow: !d.arrow }) }}>Flèche</Toggle>}
               </div>
             </>
           )}

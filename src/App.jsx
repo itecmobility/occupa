@@ -58,7 +58,7 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); s.undo(); return }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (s.draftPathId && (k === 'enter' || k === 'escape')) { s.finishPath(); return }
-      const map = { x: 'mark', t: 'text', r: 'rect', c: 'path', e: 'erase', d: 'move' }
+      const map = { x: 'mark', t: 'text', r: 'rect', l: 'line', c: 'path', e: 'erase', d: 'move' }
       if (map[k]) { s.setMode(map[k]); if (k === 't') setTimeout(() => document.getElementById('txt')?.focus(), 50); return }
       if (s.selected?.kind === 't' && (k === '+' || k === '=')) return stepTextSize(1)
       if (s.selected?.kind === 't' && (k === '-' || k === '_')) return stepTextSize(-1)

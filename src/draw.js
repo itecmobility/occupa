@@ -105,9 +105,14 @@ export function renderPlan(ctx, img, plan, o = {}) {
   const z = o.zoom || 1
   if (o.selected) {
     const { kind, item } = o.selected
-    const isRect = kind === 's' && item.type === 'rect'
+    const isRect = kind === 's' && item.type === 'rect', isLine = kind === 's' && item.type === 'line'
     const b = kind === 't' ? textBox(item) : kind === 's' ? shapeBox(item) : { x: item.x - item.size / 2, y: item.y - item.size / 2, w: item.size, h: item.size }
-    if (!isRect) { ctx.save(); ctx.setLineDash([6 / z, 4 / z]); ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 1.5 / z
+    if (isLine) {
+      const r = (o.touch ? 9 : 5.5) / z
+      ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 2 / z
+      item.pts.forEach((q) => { ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke() })
+      ctx.restore()
+    } else if (!isRect) { ctx.save(); ctx.setLineDash([6 / z, 4 / z]); ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 1.5 / z
       ctx.strokeRect(b.x - 8, b.y - 6, b.w + 16, b.h + 12); ctx.restore() }
     else {
       ctx.save(); ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 1.5 / z; ctx.strokeRect(b.x, b.y, b.w, b.h)
@@ -170,10 +175,16 @@ export function hitShape(plan, p, tol, skipId) {
   }
   return null
 }
+export function hitLineHandle(s, p, tol) { const i = s.pts.findIndex((q) => Math.abs(p.x - q.x) <= tol && Math.abs(p.y - q.y) <= tol); return i < 0 ? null : i }
+// angle multiple de 45° (touche Maj)
+export function snapAngle(a, p) {
+  const dx = p.x - a.x, dy = p.y - a.y, L = Math.hypot(dx, dy), ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4)
+  return { x: a.x + L * Math.cos(ang), y: a.y + L * Math.sin(ang) }
+}
 export function snapPoint(plan, p, tol, draftId) {
   let best = null, bd = tol
   plan.shapes.forEach((s) => {
-    if (s.type !== 'path') return
+    if (s.type !== 'path' && s.type !== 'line') return
     s.pts.forEach((q, i) => {
       if (s.id === draftId && i === s.pts.length - 1) return
       const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q }

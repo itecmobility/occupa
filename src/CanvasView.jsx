@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { useStore, translate, layersOf, layerUsable, LAYERS } from './store'
-import { renderPlan, hitText, hitMark, hitShape, snapPoint, textBox, handlePos, normRect, hitRectHandle, resizeRect, HANDLE_CURSOR } from './draw'
+import { renderPlan, hitText, hitMark, hitShape, snapPoint, textBox, handlePos, normRect, hitRectHandle, resizeRect, HANDLE_CURSOR, hitLineHandle, snapAngle } from './draw'
 import { ask } from './dialogs'
 
 export const canvasApi = { exportBlob: null, fit: null, zoomAt: null, editText: null }
@@ -28,6 +28,8 @@ export default function CanvasView() {
   const liveStroke = useRef(null)       // trait d'effaceur en cours
   const brushRef = useRef(null)         // aperçu de la taille de l'effaceur
   const moveQ = useRef(null), moveRaf = useRef(0)
+  const draftLineRef = useRef(null)     // ligne droite en cours
+  const shiftRef = useRef(false)
   const plan = useStore((s) => s.plan())
   const zoom = useStore((s) => s.zoom)
   const st = useStore()
@@ -108,6 +110,11 @@ export default function CanvasView() {
     ask.toast(`Le calque « ${lab} » est ${l.hidden[key] ? 'masqué' : 'verrouillé'}`, { description: 'Réactivez-le dans la liste des calques.' })
     return true
   }
+  const onLineHandle = (p) => {
+    const s = useStore.getState(); if (s.selected?.kind !== 's') return null
+    const l = s.selectedItem(); if (!l || l.type !== 'line') return null
+    const i = hitLineHandle(l, p, (10 * k()) / s.zoom); return i == null ? null : { l, i }
+  }
   // élément le plus haut sous le pointeur, en respectant l'ordre et l'état des calques
   function topHit(p0, p) {
     const l = layersOf(p0), s = useStore.getState()
@@ -126,6 +133,8 @@ export default function CanvasView() {
     const s = useStore.getState(), p0 = s.plan(); if (!p0) return
     const ht = !s.draftPathId && onTextHandle(p)
     if (ht) { s.snapshot(); const b = textBox(ht); dragRef.current = { resize: ht.id, w0: b.w, h0: b.h, s0: ht.size, x: ht.x, y: ht.y, moved: false }; return }
+    const lh = !s.draftPathId && onLineHandle(p)
+    if (lh) { s.snapshot(); dragRef.current = { lineEnd: lh.l.id, i: lh.i, moved: false }; return }
     const rh = !s.draftPathId && onRectHandle(p)
     if (rh) { s.snapshot(); dragRef.current = { rectResize: rh.r.id, k: rh.h.k, orig: normRect(rh.r), moved: false }; return }
 
@@ -142,6 +151,12 @@ export default function CanvasView() {
       liveStroke.current = { pts: [{ x: p.x, y: p.y }], width: s.eStyle.width, color: '#ffffff' }
       brushRef.current = null; draw()
       return
+    }
+    if (s.mode === 'line') {
+      if (blocked('shapes')) return
+      const d = s.dStyle, a = snapPoint(p0, p, (12 * k()) / s.zoom)
+      const o = s.addItem('s', { type: 'line', pts: [{ x: a.x, y: a.y }, { x: a.x, y: a.y }], color: d.color, width: d.width, dash: d.dash, node: 0, arrow: d.arrow })
+      draftLineRef.current = { id: o.id, a }; s.select(null); return
     }
     if (s.mode === 'rect') {
       if (blocked('shapes')) return
@@ -180,7 +195,7 @@ export default function CanvasView() {
       const sh = h?.kind === 's' ? h.item : null
       if (sh) {
         s.snapshot(); s.select({ kind: 's', id: sh.id })
-        useStore.setState({ dStyle: { ...s.dStyle, color: sh.color, width: sh.width, dash: !!sh.dash, ...(sh.type === 'rect' ? { fill: !!sh.fill } : { node: sh.node, arrow: !!sh.arrow }) } })
+        useStore.setState({ dStyle: { ...s.dStyle, color: sh.color, width: sh.width, dash: !!sh.dash, ...(sh.type === 'rect' ? { fill: !!sh.fill } : sh.type === 'line' ? { arrow: !!sh.arrow } : { node: sh.node, arrow: !!sh.arrow }) } })
         dragRef.current = { kind: 's', id: sh.id, last: p, moved: false }; return
       }
       s.select(null)
@@ -199,10 +214,22 @@ export default function CanvasView() {
       if (Math.hypot(p.x - last.x, p.y - last.y) >= minD) { ls.pts.push({ x: p.x, y: p.y }); draw() }
       return
     }
+    const dl = draftLineRef.current
+    if (dl) {
+      let b = shiftRef.current ? snapAngle(dl.a, p) : snapPoint(s.plan(), p, (12 * k()) / s.zoom, dl.id)
+      s.updateItem('s', dl.id, { pts: [dl.a, { x: b.x, y: b.y }] }); return
+    }
     const dr = draftRectRef.current
     if (dr) { s.updateItem('s', dr.id, { w: p.x - dr.x, h: p.y - dr.y }); return }
     const d = dragRef.current; if (!d) return
     d.moved = true
+    if (d.lineEnd) {
+      s.updateItem('s', d.lineEnd, (o) => {
+        const other = o.pts[1 - d.i]
+        const q = shiftRef.current ? snapAngle(other, p) : snapPoint(s.plan(), p, (12 * k()) / s.zoom, o.id)
+        const pts = [...o.pts]; pts[d.i] = { x: q.x, y: q.y }; return { ...o, pts }
+      }); return
+    }
     if (d.rectResize) { s.updateItem('s', d.rectResize, resizeRect(d.orig, d.k, p)); return }
     if (d.resize) {
       const kk = Math.max((p.x - d.x - 8) / d.w0, (p.y - d.y - 6) / d.h0)
@@ -229,6 +256,14 @@ export default function CanvasView() {
     }
     const ls = liveStroke.current
     if (ls) { liveStroke.current = null; s.addItem('e', ls); draw(); return }
+    const dl = draftLineRef.current
+    if (dl) {
+      draftLineRef.current = null
+      const o = s.plan()?.shapes.find((x) => x.id === dl.id)
+      if (!o || Math.hypot(o.pts[1].x - o.pts[0].x, o.pts[1].y - o.pts[0].y) < 4) { s.patchPlan((pl) => ({ ...pl, shapes: pl.shapes.filter((x) => x.id !== dl.id) }), false); s.dropSnapshot() }
+      else s.select({ kind: 's', id: dl.id })
+      return
+    }
     const dr = draftRectRef.current
     if (dr) {
       draftRectRef.current = null
@@ -251,6 +286,7 @@ export default function CanvasView() {
     panRef.current = null
     if (pathPress.current) { pathPress.current = false; hoverRef.current = null }
     if (liveStroke.current) { liveStroke.current = null; draw() }
+    if (draftLineRef.current) { const id = draftLineRef.current.id; draftLineRef.current = null; s.patchPlan((pl) => ({ ...pl, shapes: pl.shapes.filter((x) => x.id !== id) }), false); s.dropSnapshot() }
     if (draftRectRef.current) { const id = draftRectRef.current.id; draftRectRef.current = null; s.patchPlan((pl) => ({ ...pl, shapes: pl.shapes.filter((x) => x.id !== id) }), false); s.dropSnapshot() }
     if (dragRef.current) { const moved = dragRef.current.moved; dragRef.current = null; if (moved) s.undo(); else s.dropSnapshot() }
   }
@@ -305,6 +341,7 @@ export default function CanvasView() {
   // les mouvements sont traités une fois par image (60 i/s) pour rester fluide sur tablette
   function onPointerMove(e) {
     if (ptrs.current.has(e.pointerId)) ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    shiftRef.current = e.shiftKey
     moveQ.current = { pointerId: e.pointerId, pointerType: e.pointerType, clientX: e.clientX, clientY: e.clientY, target: e.target }
     if (!moveRaf.current) moveRaf.current = requestAnimationFrame(() => { moveRaf.current = 0; const q = moveQ.current; moveQ.current = null; if (q) processMove(q) })
   }
@@ -335,7 +372,7 @@ export default function CanvasView() {
       if (s.mode === 'path' && e.pointerType !== 'touch') { hoverRef.current = snapAt(p); draw() }
       else if (hoverRef.current) { hoverRef.current = null; draw() }
       if (s.mode === 'erase' && e.pointerType !== 'touch') { brushRef.current = { x: p.x, y: p.y, r: s.eStyle.width / 2 }; draw() }
-      if (e.target === cv) { const rh = onRectHandle(p); cv.style.cursor = onTextHandle(p) ? 'nwse-resize' : rh ? HANDLE_CURSOR[rh.h.k] : '' }
+      if (e.target === cv) { const rh = onRectHandle(p); cv.style.cursor = onTextHandle(p) ? 'nwse-resize' : rh ? HANDLE_CURSOR[rh.h.k] : onLineHandle(p) ? 'move' : '' }
       return
     }
     move(p, e.clientX, e.clientY)
@@ -380,7 +417,7 @@ export default function CanvasView() {
     return () => m.removeEventListener('wheel', onWheel)
   }, [zoomAt])
 
-  const cursor = { mark: 'crosshair', rect: 'crosshair', path: 'crosshair', text: 'text', move: 'grab', erase: 'none' }[st.mode]
+  const cursor = { mark: 'crosshair', rect: 'crosshair', line: 'crosshair', path: 'crosshair', text: 'text', move: 'grab', erase: 'none' }[st.mode]
   const cv = cvRef.current
   return (
     <main ref={mainRef}

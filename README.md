@@ -3,7 +3,7 @@
 Outil web d'ITEC Mobility pour relever l'occupation du stationnement sur un plan, heure par heure.
 
 - Marquer les places occupées (X) avec un compteur automatique
-- Ajouter du texte, des rectangles et des circuits (couleurs, tailles, pointillés, flèches)
+- Ajouter du texte, des rectangles, des lignes droites et des circuits (couleurs, tailles, pointillés, flèches)
 - Effaceur (pinceau blanc à taille réglable) pour retirer des éléments du plan d'origine
 - Calques : ordre, masquage et verrouillage des X, textes, dessins et corrections
 - Gérer plusieurs plans (zones), les rogner à l'import

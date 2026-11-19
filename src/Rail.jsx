@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { X, Type, Square, Spline, MousePointer2, Undo2, Eraser } from 'lucide-react'
+import { X, Type, Square, Spline, MousePointer2, Undo2, Eraser, Slash } from 'lucide-react'
 import { useStore } from './store'
 import { Tip, cn } from './components/ui'
 
@@ -7,6 +7,7 @@ export const TOOLS = [
   { id: 'mark', dom: 'tMark', icon: X, label: 'Marquer', tip: 'Marquer une place occupée', kbd: 'X' },
   { id: 'text', dom: 'tText', icon: Type, label: 'Texte', tip: 'Placer un texte', kbd: 'T' },
   { id: 'rect', dom: 'tRect', icon: Square, label: 'Rectangle', tip: 'Entourer des places', kbd: 'R' },
+  { id: 'line', dom: 'tLine', icon: Slash, label: 'Ligne', tip: 'Tracer une ligne droite (Maj : angles de 45°)', kbd: 'L' },
   { id: 'path', dom: 'tPath', icon: Spline, label: 'Circuit', tip: 'Dessiner un circuit', kbd: 'C' },
   { id: 'erase', dom: 'tErase', icon: Eraser, label: 'Effaceur', tip: 'Effacer des éléments du plan au pinceau blanc', kbd: 'E' },
   { id: 'move', dom: 'tMove', icon: MousePointer2, label: 'Déplacer', tip: 'Sélectionner et déplacer', kbd: 'D' },
