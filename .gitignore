@@ -2,3 +2,4 @@ node_modules
 dist
 dist-public
 src/plan.png
+dist-local

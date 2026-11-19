@@ -92,12 +92,12 @@ export function renderPlan(ctx, img, plan, o = {}) {
       ctx.strokeRect(b.x - 8, b.y - 6, b.w + 16, b.h + 12); ctx.restore() }
     else {
       ctx.save(); ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 1.5 / z; ctx.strokeRect(b.x, b.y, b.w, b.h)
-      const r = 5 / z; ctx.fillStyle = '#fff'; ctx.lineWidth = 1.5 / z
+      const r = (o.touch ? 9 : 5) / z; ctx.fillStyle = '#fff'; ctx.lineWidth = 1.5 / z
       rectHandles(item).forEach((h) => { ctx.fillRect(h.x - r, h.y - r, 2 * r, 2 * r); ctx.strokeRect(h.x - r, h.y - r, 2 * r, 2 * r) })
       ctx.restore()
     }
     if (kind === 't') {
-      const h = handlePos(item), r = 6 / z
+      const h = handlePos(item), r = (o.touch ? 11 : 6) / z
       ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 2 / z
       ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore()
     }

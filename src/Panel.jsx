@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Bold, Highlighter, SquareDashed, PaintBucket, MoveRight, X, Square, Trash2, MousePointerClick } from 'lucide-react'
+import { Bold, Highlighter, SquareDashed, PaintBucket, MoveRight, X, Square, Trash2, MousePointerClick, PencilLine, Check } from 'lucide-react'
+import { canvasApi } from './CanvasView'
 import { useStore } from './store'
 import { Button, ColorField, SizeField, Toggle, Switch, Field, Kbd } from './components/ui'
 import { PSign } from './TopBar'
@@ -36,7 +37,8 @@ function Counter() {
   )
 }
 
-export default function Panel() {
+export default function Panel({ variant = 'side' }) {
+  const sheet = variant === 'sheet'
   const s = useStore()
   const sel = s.selected, item = s.selectedItem()
   const k = sel ? (sel.kind === 't' ? 'text' : sel.kind === 'm' ? 'mark' : item?.type || 'move') : s.draftPathId ? 'path' : s.mode
@@ -46,12 +48,12 @@ export default function Panel() {
   const { xStyle: x, tStyle: t, dStyle: d, setStyle } = s
 
   return (
-    <aside aria-label="Réglages" className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-l border-line bg-surface">
-      <Counter />
+    <aside aria-label="Réglages" className={sheet ? 'flex flex-col' : 'flex w-[300px] shrink-0 flex-col overflow-y-auto border-l border-line bg-surface'}>
+      {!sheet && <Counter />}
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.section key={key + (item?.id || '')} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14 }}
-          className="flex flex-col gap-5 px-5 pb-6 pt-1">
+          className={sheet ? 'flex flex-col gap-5 px-5 pb-5 pt-0' : 'flex flex-col gap-5 px-5 pb-6 pt-1'}>
           <div>
             <h2 id="ctxTitle" className="text-[15px] font-semibold tracking-tight">{title}</h2>
             <p className="mt-1 text-[13px] leading-relaxed text-muted">{hint}</p>
@@ -105,9 +107,15 @@ export default function Panel() {
             </div>
           )}
 
+          {s.draftPathId && (
+            <Button variant="primary" className="self-start" onClick={() => s.finishPath()}><Check size={16} />Terminer le circuit</Button>
+          )}
+          {sel?.kind === 't' && (
+            <Button variant="outline" size="sm" className="self-start" onClick={() => canvasApi.editText?.()}><PencilLine size={15} />Modifier le texte</Button>
+          )}
           {sel && (
             <Button variant="danger-ghost" size="sm" className="self-start -ml-2.5" onClick={() => s.removeItem(sel.kind, sel.id)}>
-              <Trash2 size={15} />Supprimer l'élément <Kbd>Suppr</Kbd>
+              <Trash2 size={15} />Supprimer l'élément <Kbd className="hidden lg:inline-flex">Suppr</Kbd>
             </Button>
           )}
         </motion.section>
@@ -116,6 +124,12 @@ export default function Panel() {
       <div className="mt-auto flex flex-col gap-5 border-t border-line px-5 py-5">
         <div className="flex flex-col gap-3">
           <h3 className="text-[13px] font-semibold">Image enregistrée</h3>
+          {sheet && (
+            <label className="flex h-10 items-center rounded-lg border border-line-strong bg-surface pl-3 pr-3 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft">
+              <input value={s.fname} onChange={(e) => s.setFname(e.target.value)} aria-label="Nom du fichier" className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none" />
+              <span className="text-sm text-muted">.png</span>
+            </label>
+          )}
           <Switch id="stamp" label="Afficher l'heure du relevé" checked={s.stamp} onCheckedChange={(v) => s.setPref('stamp', v)} />
           <Switch id="showCount" label="Afficher le nombre de places occupées" checked={s.showCount} onCheckedChange={(v) => s.setPref('showCount', v)} />
           <Switch id="autoClear" label="Vider les X après l'enregistrement" checked={s.autoClear} onCheckedChange={(v) => s.setPref('autoClear', v)} />

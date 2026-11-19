@@ -30,8 +30,7 @@ export function DialogHost() {
           <Dialog.Content asChild aria-describedby={undefined} onOpenAutoFocus={(e) => d.type === 'crop' && e.preventDefault()}>
             <motion.div
               initial={{ opacity: 0, scale: 0.97, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="fixed left-1/2 top-1/2 z-50 flex max-h-[94vh] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-2xl border border-line bg-surface p-6 text-fg shadow-2xl"
-              style={{ minWidth: d.type === 'crop' ? undefined : 420 }}
+              className={'fixed left-1/2 top-1/2 z-50 flex max-h-[94dvh] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-2xl border border-line bg-surface p-5 text-fg shadow-2xl sm:p-6 ' + (d.type === 'crop' ? '' : 'w-[min(440px,calc(100vw-24px))]')}
             >
               {d.type === 'confirm' && <ConfirmBody d={d} />}
               {d.type === 'prompt' && <PromptBody d={d} />}
@@ -92,14 +91,11 @@ function CropBody({ d }) {
     const im = new Image()
     im.onload = () => {
       const c = cRef.current, S = state.current
-      const s = Math.min((window.innerWidth * 0.92 - 48) / im.width, (window.innerHeight * 0.94 - 210) / im.height, 1)
+      const s = Math.min((window.innerWidth * 0.94 - 40) / im.width, (window.innerHeight * 0.94 - (window.innerWidth < 640 ? 300 : 210)) / im.height, 1)
       c.width = Math.round(im.width * s); c.height = Math.round(im.height * s)
       Object.assign(S, { im, s }); redraw()
     }
     im.src = d.src
-    const mm = (e) => onMove(e), mu = () => onUp()
-    window.addEventListener('mousemove', mm); window.addEventListener('mouseup', mu)
-    return () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu) }
   }, [])
 
   const norm = (q) => ({ x: Math.min(q.x, q.x + q.w), y: Math.min(q.y, q.y + q.h), w: Math.abs(q.w), h: Math.abs(q.h) })
@@ -123,10 +119,11 @@ function CropBody({ d }) {
     } else setInfo(`Image entière · ${im.width} × ${im.height} px`)
   }
   function onDown(e) {
-    const S = state.current, p = P(e)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
+    const S = state.current, p = P(e), T = e.pointerType === 'touch' ? 22 : 11
     if (S.r && S.r.w && S.r.h) {
       const q = norm(S.r); S.r = q
-      const ci = corners(q).findIndex(([x, y]) => Math.abs(p.x - x) < 11 && Math.abs(p.y - y) < 11)
+      const ci = corners(q).findIndex(([x, y]) => Math.abs(p.x - x) < T && Math.abs(p.y - y) < T)
       if (ci >= 0) { const [ox, oy] = corners(q)[3 - ci]; S.act = { t: 'new', ox, oy }; S.r = { x: ox, y: oy, w: p.x - ox, h: p.y - oy }; redraw(); return }
       if (p.x > q.x && p.x < q.x + q.w && p.y > q.y && p.y < q.y + q.h) { S.act = { t: 'move', dx: p.x - q.x, dy: p.y - q.y }; return }
     }
@@ -153,10 +150,10 @@ function CropBody({ d }) {
     <>
       <Head title={d.title} description="Tracez un rectangle sur la partie à garder. Glissez l'intérieur pour le déplacer, les coins pour l'ajuster." />
       <div className="overflow-hidden rounded-xl bg-sunken ring-1 ring-line">
-        <canvas ref={cRef} onMouseDown={onDown} className="mx-auto block max-w-full cursor-crosshair" />
+        <canvas ref={cRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} className="mx-auto block max-w-full cursor-crosshair touch-none" />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-auto text-sm text-muted">{info}</span>
+        <span className="w-full text-sm text-muted sm:mr-auto sm:w-auto">{info}</span>
         <Button variant="ghost" onClick={() => { state.current.r = { x: 0, y: 0, w: cRef.current.width, h: cRef.current.height }; redraw() }}><Scan size={16} />Tout sélectionner</Button>
         <Button variant="ghost" onClick={() => close(null)}>Annuler</Button>
         <Button variant="outline" onClick={() => close({ src: d.src, box: null })}><Maximize2 size={16} />Garder l'image entière</Button>

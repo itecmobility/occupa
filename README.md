@@ -7,6 +7,8 @@ Outil web d'ITEC Mobility pour relever l'occupation du stationnement sur un plan
 - Gérer plusieurs plans (zones), les rogner à l'import
 - Enregistrer le plan annoté en PNG, nommé `<Zone>_<HHhMM>.png`
 - Mode clair et mode sombre
+- Utilisable sur ordinateur, tablette et téléphone (tactile, pincer pour zoomer)
+- Installable comme une application depuis le navigateur, fonctionne hors connexion
 
 Les plans et les relevés restent dans le navigateur de l'utilisateur (IndexedDB) : rien n'est envoyé sur un serveur.
 

@@ -11,14 +11,15 @@ import CanvasView, { canvasApi } from './CanvasView'
 import { DialogHost, isDialogOpen } from './dialogs'
 import { save, stepTextSize } from './actions'
 import { Button, Tip } from './components/ui'
+import { BottomBar, SettingsSheet, FloatingCounter, FinishPathChip, useMedia } from './Mobile'
 
 function ZoomBar() {
   const zoom = useStore((s) => s.zoom), setZoom = useStore((s) => s.setZoom)
   return (
     <div className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-line bg-raised p-1 shadow-float">
-      <Tip label="Dézoomer" side="top"><button id="zOut" onClick={() => setZoom(zoom / 1.2)} className="grid size-8 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg"><Minus size={16} /></button></Tip>
-      <button onClick={() => setZoom(1)} title="Taille réelle" className="h-8 min-w-14 rounded-lg px-2 text-[13px] font-semibold text-fg-2 hover:bg-sunken">{Math.round(zoom * 100)} %</button>
-      <Tip label="Zoomer" side="top"><button id="zIn" onClick={() => setZoom(zoom * 1.2)} className="grid size-8 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg"><Plus size={16} /></button></Tip>
+      <Tip label="Dézoomer" side="top"><button id="zOut" onClick={() => canvasApi.zoomAt?.(zoom / 1.2)} className="grid size-8 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg"><Minus size={16} /></button></Tip>
+      <button onClick={() => canvasApi.zoomAt?.(1)} title="Taille réelle" className="h-8 min-w-14 rounded-lg px-2 text-[13px] font-semibold text-fg-2 hover:bg-sunken">{Math.round(zoom * 100)} %</button>
+      <Tip label="Zoomer" side="top"><button id="zIn" onClick={() => canvasApi.zoomAt?.(zoom * 1.2)} className="grid size-8 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg"><Plus size={16} /></button></Tip>
       <div className="mx-0.5 h-5 w-px bg-line" />
       <Tip label="Ajuster à l'écran" side="top"><button id="zFit" onClick={() => canvasApi.fit?.()} className="grid size-8 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg"><Maximize size={15} /></button></Tip>
     </div>
@@ -41,6 +42,8 @@ function Empty() {
 export default function App() {
   const ready = useStore((s) => s.ready), hasPlan = useStore((s) => !!s.plan())
   const theme = useStore((s) => s.theme)
+  const desktop = useMedia('(min-width: 1024px)')
+  useEffect(() => { if (desktop) useStore.setState({ sheetOpen: false }) }, [desktop])
 
   useEffect(() => { useStore.getState().init() }, [])
 
@@ -69,19 +72,27 @@ export default function App() {
   return (
     <Tooltip.Provider>
       <div className="flex h-full flex-col">
-        <TopBar />
+        <TopBar compact={!desktop} />
         <div className="flex min-h-0 flex-1">
-          <Rail />
-          <div className="relative min-w-0 flex-1">
+          {desktop && <Rail />}
+          <div className="relative min-w-0 flex-1 overflow-hidden">
             <CanvasView />
             {ready && !hasPlan && <Empty />}
-            {hasPlan && <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar /></div>}
+            {hasPlan && !desktop && <FloatingCounter />}
+            {hasPlan && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 sm:bottom-4">
+                <FinishPathChip />
+                <ZoomBar />
+              </div>
+            )}
+            {!desktop && <SettingsSheet />}
           </div>
-          <Panel />
+          {desktop && <Panel />}
         </div>
+        {!desktop && <BottomBar />}
       </div>
       <DialogHost />
-      <Toaster theme={theme} position="bottom-center" offset={76} toastOptions={{ style: { fontFamily: 'var(--font-sans)', background: 'var(--raised)', color: 'var(--fg)', border: '1px solid var(--line)', boxShadow: 'var(--shadow-float)' } }} />
+      <Toaster theme={theme} position="bottom-center" offset={desktop ? 76 : 150} toastOptions={{ style: { fontFamily: 'var(--font-sans)', background: 'var(--raised)', color: 'var(--fg)', border: '1px solid var(--line)', boxShadow: 'var(--shadow-float)' } }} />
     </Tooltip.Provider>
   )
 }

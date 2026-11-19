@@ -43,6 +43,8 @@ export const useStore = window.__releve = create((set, get) => ({
   selected: null,          // {kind:'m'|'t'|'s', id}
   draftPathId: null,
   zoom: 1,
+  sheetOpen: false,
+  installEvt: null,
   theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
 
   xStyle: { color: '#e00000', size: 22, width: 4 },
