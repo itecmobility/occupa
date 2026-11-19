@@ -1,5 +1,5 @@
 // Occupa — service worker : fonctionnement hors ligne
-const CACHE = 'occupa-v1'
+const CACHE = 'occupa-v2'
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png']
 
 self.addEventListener('install', (e) => {

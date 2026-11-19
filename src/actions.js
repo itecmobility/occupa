@@ -33,6 +33,12 @@ export function clearMarks() {
   const n = p.marks.length; s.clear(['marks']); s.select(null)
   ask.toast(`${n} X effacé${n > 1 ? 's' : ''}`, { action: { label: 'Annuler', onClick: () => useStore.getState().undo() } })
 }
+export function clearStrokes() {
+  const s = useStore.getState(), p = s.plan()
+  if (!p?.strokes?.length) return ask.toast('Aucune correction à effacer')
+  s.clear(['strokes'])
+  ask.toast('Corrections de l\'effaceur retirées', { action: { label: 'Annuler', onClick: () => useStore.getState().undo() } })
+}
 export function clearShapes() {
   const s = useStore.getState(); if (s.draftPathId) s.finishPath()
   const p = s.plan()
@@ -43,9 +49,9 @@ export function clearShapes() {
 export async function clearAll() {
   const s = useStore.getState(); if (s.draftPathId) s.finishPath()
   const p = s.plan()
-  if (!p || (!p.marks.length && !p.texts.length && !p.shapes.length)) return ask.toast('Rien à effacer')
-  const ok = await ask.confirm({ title: 'Tout effacer ?', description: `Tous les X, textes, rectangles et circuits de « ${p.name} » seront retirés. Vous pourrez annuler avec Ctrl+Z.`, ok: 'Tout effacer', danger: true })
-  if (ok) { s.clear(['marks', 'texts', 'shapes']); s.select(null) }
+  if (!p || (!p.marks.length && !p.texts.length && !p.shapes.length && !p.strokes?.length)) return ask.toast('Rien à effacer')
+  const ok = await ask.confirm({ title: 'Tout effacer ?', description: `Tous les X, textes, rectangles, circuits et corrections de « ${p.name} » seront retirés. Vous pourrez annuler avec Ctrl+Z.`, ok: 'Tout effacer', danger: true })
+  if (ok) { s.clear(['marks', 'texts', 'shapes', 'strokes']); s.select(null) }
 }
 export function stepTextSize(dir) {
   const s = useStore.getState(), v = s.tStyle.size

@@ -70,13 +70,32 @@ function drawShape(ctx, s, hover) {
   ctx.restore()
 }
 
+function drawStroke(ctx, s) {
+  ctx.save()
+  ctx.strokeStyle = ctx.fillStyle = s.color || '#ffffff'
+  ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash([])
+  const p = s.pts
+  if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0].x, p[0].y, s.width / 2, 0, Math.PI * 2); ctx.fill() }
+  else {
+    ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y)
+    for (let i = 1; i < p.length - 1; i++) { const mx = (p[i].x + p[i + 1].x) / 2, my = (p[i].y + p[i + 1].y) / 2; ctx.quadraticCurveTo(p[i].x, p[i].y, mx, my) }
+    ctx.lineTo(p[p.length - 1].x, p[p.length - 1].y); ctx.stroke()
+  }
+  ctx.restore()
+}
+
 export function renderPlan(ctx, img, plan, o = {}) {
   const { width: W, height: H } = ctx.canvas
   ctx.clearRect(0, 0, W, H)
   if (img && img.naturalWidth) ctx.drawImage(img, 0, 0)
-  plan.shapes.forEach((s) => drawShape(ctx, s, !o.export && s.id === o.draftId ? o.hover : null))
-  plan.marks.forEach((m) => drawX(ctx, m))
-  plan.texts.forEach((t) => drawText(ctx, t))
+  const L = o.layers || { order: ['strokes', 'shapes', 'marks', 'texts'], hidden: {} }
+  for (const key of L.order) {
+    if (L.hidden[key]) continue
+    if (key === 'strokes') { (plan.strokes || []).forEach((s) => drawStroke(ctx, s)); if (o.liveStroke && !o.export) drawStroke(ctx, o.liveStroke) }
+    else if (key === 'shapes') plan.shapes.forEach((s) => drawShape(ctx, s, !o.export && s.id === o.draftId ? o.hover : null))
+    else if (key === 'marks') plan.marks.forEach((m) => drawX(ctx, m))
+    else if (key === 'texts') plan.texts.forEach((t) => drawText(ctx, t))
+  }
   if (o.stamp) {
     const st = { text: o.stamp, size: Math.max(14, Math.round(W / 40)), color: '#0f1f3d', bold: true, bg: true, y: 20, x: 0 }
     st.x = W - textBox(st).w - 30
@@ -101,6 +120,16 @@ export function renderPlan(ctx, img, plan, o = {}) {
       ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 2 / z
       ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore()
     }
+  }
+  if (o.hover && !o.draftId && o.pathStyle) {      // aperçu du 1er point d'un circuit
+    ctx.save(); ctx.fillStyle = o.pathStyle.color; ctx.globalAlpha = 0.85
+    ctx.beginPath(); ctx.arc(o.hover.x, o.hover.y, Math.max(o.pathStyle.node, o.pathStyle.width * 1.5, 6 / z) / 2, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+  }
+  if (o.brush) {                                     // taille de l'effaceur
+    ctx.save(); ctx.lineWidth = 1.5 / z
+    ctx.strokeStyle = 'rgba(15,31,61,.9)'; ctx.beginPath(); ctx.arc(o.brush.x, o.brush.y, o.brush.r, 0, Math.PI * 2); ctx.stroke()
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(o.brush.x, o.brush.y, o.brush.r + 1.5 / z, 0, Math.PI * 2); ctx.stroke()
+    ctx.restore()
   }
   if (o.hover && o.hover.snap) {
     ctx.save(); ctx.strokeStyle = '#2f62e8'; ctx.lineWidth = 2 / z

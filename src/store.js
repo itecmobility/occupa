@@ -27,9 +27,24 @@ const meta = {
   set: (k, v) => { try { localStorage.setItem('releve_' + k, v) } catch {} },
 }
 
+export const LAYERS = [
+  { key: 'strokes', label: 'Corrections (effaceur)', short: 'Effaceur', kind: 'e' },
+  { key: 'shapes', label: 'Rectangles et circuits', short: 'Dessins', kind: 's' },
+  { key: 'marks', label: 'Places occupées (X)', short: 'Places (X)', kind: 'm' },
+  { key: 'texts', label: 'Textes', short: 'Textes', kind: 't' },
+]
+export const keyOf = (kind) => ({ t: 'texts', m: 'marks', s: 'shapes', e: 'strokes' })[kind]
+export const kindOf = (key) => LAYERS.find((l) => l.key === key).kind
+export function layersOf(p) {
+  const l = p?.layers || {}
+  const order = (l.order && l.order.length === LAYERS.length) ? l.order : LAYERS.map((x) => x.key)
+  return { order, hidden: l.hidden || {}, locked: l.locked || {} }
+}
+export const layerUsable = (p, key) => { const l = layersOf(p); return !l.hidden[key] && !l.locked[key] }
+
 function normalizePlan(p) {
   const withId = (a) => (a || []).map((o) => (o.id ? o : { ...o, id: uid() }))
-  return { ...p, marks: withId(p.marks), texts: withId(p.texts), shapes: withId(p.shapes) }
+  return { ...p, marks: withId(p.marks), texts: withId(p.texts), shapes: withId(p.shapes), strokes: withId(p.strokes), layers: layersOf(p) }
 }
 
 /* ---------------- Store ---------------- */
@@ -50,6 +65,7 @@ export const useStore = window.__releve = create((set, get) => ({
   xStyle: { color: '#e00000', size: 22, width: 4 },
   tStyle: { color: '#0f1f3d', size: 36, bold: true, bg: false },
   dStyle: { color: '#16a34a', width: 4, dash: false, fill: false, node: 6, arrow: false },
+  eStyle: { width: 24 },
   textValue: '',
 
   hour: pad(now.getHours()),
@@ -66,7 +82,7 @@ export const useStore = window.__releve = create((set, get) => ({
   selectedItem: () => {
     const { selected } = get(); const p = get().plan()
     if (!selected || !p) return null
-    const arr = selected.kind === 't' ? p.texts : selected.kind === 'm' ? p.marks : p.shapes
+    const arr = p[keyOf(selected.kind)] || []
     return arr.find((o) => o.id === selected.id) || null
   },
 
@@ -77,7 +93,7 @@ export const useStore = window.__releve = create((set, get) => ({
     if (!import.meta.env.VITE_PUBLIC && !plans.length && (!db || !meta.get('init'))) {
       const demo = Object.values(import.meta.glob('./plan.png', { query: '?url', import: 'default' }))[0]
       if (demo) {
-        const p = { id: uid(), name: 'Zone2', src: await demo(), marks: [], texts: [], shapes: [] }
+        const p = { id: uid(), name: 'Zone2', src: await demo(), marks: [], texts: [], shapes: [], strokes: [], layers: layersOf(null) }
         plans.push(p); dbPut(p); meta.set('init', '1')
       }
     }
@@ -95,7 +111,7 @@ export const useStore = window.__releve = create((set, get) => ({
     get().refreshName()
   },
   addPlan: (name, src) => {
-    const p = { id: uid(), name, src, marks: [], texts: [], shapes: [] }
+    const p = { id: uid(), name, src, marks: [], texts: [], shapes: [], strokes: [], layers: layersOf(null) }
     set({ plans: [...get().plans, p] }); dbPut(p); get().switchPlan(p.id)
     return p
   },
@@ -112,6 +128,7 @@ export const useStore = window.__releve = create((set, get) => ({
       marks: p.marks.map((m) => ({ ...m, x: m.x - box.x, y: m.y - box.y })).filter(inside),
       texts: p.texts.map((t) => ({ ...t, x: t.x - box.x, y: t.y - box.y })).filter(inside),
       shapes: p.shapes.map((s) => translate(s, -box.x, -box.y)),
+      strokes: p.strokes.map((s) => translate(s, -box.x, -box.y)),
     }))
   },
 
@@ -125,7 +142,7 @@ export const useStore = window.__releve = create((set, get) => ({
   },
   snapshot: () => {
     const p = get().plan(); if (!p) return
-    const h = [...get().history, JSON.stringify({ marks: p.marks, texts: p.texts, shapes: p.shapes })]
+    const h = [...get().history, JSON.stringify({ marks: p.marks, texts: p.texts, shapes: p.shapes, strokes: p.strokes })]
     if (h.length > 200) h.shift()
     set({ history: h })
   },
@@ -139,20 +156,30 @@ export const useStore = window.__releve = create((set, get) => ({
     return true
   },
   updateItem: (kind, id, patch, record = false) => {
-    const key = kind === 't' ? 'texts' : kind === 'm' ? 'marks' : 'shapes'
+    const key = keyOf(kind)
     get().patchPlan((p) => ({ ...p, [key]: p[key].map((o) => (o.id === id ? (typeof patch === 'function' ? patch(o) : { ...o, ...patch }) : o)) }), record)
   },
   removeItem: (kind, id) => {
-    const key = kind === 't' ? 'texts' : kind === 'm' ? 'marks' : 'shapes'
+    const key = keyOf(kind)
     get().patchPlan((p) => ({ ...p, [key]: p[key].filter((o) => o.id !== id) }))
     if (get().selected?.id === id) set({ selected: null })
   },
   addItem: (kind, obj, record = true) => {
-    const key = kind === 't' ? 'texts' : kind === 'm' ? 'marks' : 'shapes'
+    const key = keyOf(kind)
     const o = { id: uid(), ...obj }
     get().patchPlan((p) => ({ ...p, [key]: [...p[key], o] }), record)
     return o
   },
+  toggleLayer: (key, prop) => {
+    get().patchPlan((p) => { const l = layersOf(p); return { ...p, layers: { ...l, [prop]: { ...l[prop], [key]: !l[prop][key] } } } }, false)
+    const sel = get().selected; if (sel && keyOf(sel.kind) === key) set({ selected: null })
+  },
+  moveLayer: (key, dir) => get().patchPlan((p) => {
+    const l = layersOf(p), o = [...l.order], i = o.indexOf(key), j = i + dir
+    if (j < 0 || j >= o.length) return p
+    ;[o[i], o[j]] = [o[j], o[i]]
+    return { ...p, layers: { ...l, order: o } }
+  }, false),
   clear: (keys) => get().patchPlan((p) => { const n = { ...p }; keys.forEach((k) => (n[k] = [])); return n }),
 
   /* ---- path drafting ---- */

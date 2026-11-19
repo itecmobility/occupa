@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { useStore, translate } from './store'
+import { useStore, translate, layersOf, layerUsable, LAYERS } from './store'
 import { renderPlan, hitText, hitMark, hitShape, snapPoint, textBox, handlePos, normRect, hitRectHandle, resizeRect, HANDLE_CURSOR } from './draw'
 import { ask } from './dialogs'
 
@@ -12,7 +12,7 @@ function stampFor(s, p) {
 }
 
 const TAP_SLOP = 8          // px écran avant de considérer qu'un doigt « glisse »
-const TOUCH_COMMIT_MS = 110 // délai avant de valider un geste à un doigt (laisse le temps d'un pinch)
+const TOUCH_COMMIT_MS = 80 // délai avant de valider un geste à un doigt (laisse le temps d'un pinch)
 
 export default function CanvasView() {
   const cvRef = useRef(null), mainRef = useRef(null)
@@ -24,6 +24,10 @@ export default function CanvasView() {
   const anchor = useRef(null)           // point à garder sous les doigts/la souris lors d'un zoom
   const lastTap = useRef(null)
   const touchMode = useRef(false)
+  const pathPress = useRef(false)       // doigt/souris appuyé pendant le placement d'un point de circuit
+  const liveStroke = useRef(null)       // trait d'effaceur en cours
+  const brushRef = useRef(null)         // aperçu de la taille de l'effaceur
+  const moveQ = useRef(null), moveRaf = useRef(0)
   const plan = useStore((s) => s.plan())
   const zoom = useStore((s) => s.zoom)
   const st = useStore()
@@ -35,7 +39,9 @@ export default function CanvasView() {
     renderPlan(cv.getContext('2d'), imgRef.current, p, {
       export: exp, zoom: s.zoom, draftId: s.draftPathId, hover: hoverRef.current,
       selected: item ? { kind: s.selected.kind, item } : null,
-      stamp: stampFor(s, p), touch: touchMode.current,
+      stamp: stampFor(s, p), touch: touchMode.current, layers: layersOf(p),
+      liveStroke: liveStroke.current, brush: s.mode === 'erase' ? brushRef.current : null,
+      pathStyle: s.mode === 'path' ? s.dStyle : null,
     })
   }, [])
 
@@ -95,6 +101,26 @@ export default function CanvasView() {
     const h = hitRectHandle(r, p, (9 * k()) / s.zoom); return h ? { r, h } : null
   }
 
+  function blocked(key) {
+    const s = useStore.getState(), l = layersOf(s.plan())
+    if (!l.hidden[key] && !l.locked[key]) return false
+    const lab = LAYERS.find((x) => x.key === key).label
+    ask.toast(`Le calque « ${lab} » est ${l.hidden[key] ? 'masqué' : 'verrouillé'}`, { description: 'Réactivez-le dans la liste des calques.' })
+    return true
+  }
+  // élément le plus haut sous le pointeur, en respectant l'ordre et l'état des calques
+  function topHit(p0, p) {
+    const l = layersOf(p0), s = useStore.getState()
+    for (const key of [...l.order].reverse()) {
+      if (l.hidden[key] || l.locked[key]) continue
+      if (key === 'texts') { const t = hitText(p0, p); if (t) return { kind: 't', item: t } }
+      if (key === 'marks') { const m = hitMark(p0, p); if (m) return { kind: 'm', item: m } }
+      if (key === 'shapes') { const sh = hitShape(p0, p, tol(), s.draftPathId); if (sh) return { kind: 's', item: sh } }
+    }
+    return null
+  }
+  const snapAt = (p) => { const s = useStore.getState(); return snapPoint(s.plan(), p, (12 * k()) / s.zoom, s.draftPathId) }
+
   // début d'un geste à un pointeur (souris, stylet, ou doigt validé)
   function down(p, onCanvas, cx, cy) {
     const s = useStore.getState(), p0 = s.plan(); if (!p0) return
@@ -106,40 +132,52 @@ export default function CanvasView() {
     if (!onCanvas) { startPan(cx, cy); return }
 
     if (s.mode === 'path') {
-      const q = snapPoint(p0, p, (12 * k()) / s.zoom, s.draftPathId)
-      if (!s.draftPathId) {
-        const d = s.dStyle
-        const o = s.addItem('s', { type: 'path', pts: [{ x: q.x, y: q.y }], color: d.color, width: d.width, dash: d.dash, node: d.node, arrow: d.arrow })
-        useStore.setState({ draftPathId: o.id, selected: null })
-      } else s.updateItem('s', s.draftPathId, (o) => ({ ...o, pts: [...o.pts, { x: q.x, y: q.y }] }))
+      // le point est posé au relâchement : on peut l'ajuster en glissant, avec un aperçu en direct
+      if (blocked('shapes')) return
+      pathPress.current = true; hoverRef.current = snapAt(p); s.select(null); draw()
+      return
+    }
+    if (s.mode === 'erase') {
+      if (blocked('strokes')) return
+      liveStroke.current = { pts: [{ x: p.x, y: p.y }], width: s.eStyle.width, color: '#ffffff' }
+      brushRef.current = null; draw()
       return
     }
     if (s.mode === 'rect') {
+      if (blocked('shapes')) return
       const d = s.dStyle
       const o = s.addItem('s', { type: 'rect', x: p.x, y: p.y, w: 0, h: 0, color: d.color, width: d.width, dash: d.dash, fill: d.fill })
       draftRectRef.current = { id: o.id, x: p.x, y: p.y }; s.select(null); return
     }
-    const t = hitText(p0, p)
+    const t = layerUsable(p0, 'texts') && s.mode !== 'move' ? hitText(p0, p) : null
     if (t) {
       s.snapshot(); s.select({ kind: 't', id: t.id })
       useStore.setState({ tStyle: { color: t.color, size: t.size, bold: t.bold, bg: t.bg } })
       dragRef.current = { kind: 't', id: t.id, dx: p.x - t.x, dy: p.y - t.y, moved: false }; return
     }
     if (s.mode === 'mark') {
+      if (blocked('marks')) return
       const m = hitMark(p0, p)
       if (m) s.removeItem('m', m.id)
       else { const x = s.xStyle; s.addItem('m', { x: p.x, y: p.y, size: x.size, width: x.width, color: x.color }) }
       s.select(null)
     } else if (s.mode === 'text') {
+      if (blocked('texts')) return
       const val = s.textValue.trim()
       if (!val) { ask.toast('Écrivez d\'abord le texte dans les réglages'); useStore.setState({ sheetOpen: true }); setTimeout(() => document.getElementById('txt')?.focus(), 250); return }
       const ts = s.tStyle
       const o = s.addItem('t', { text: val, x: p.x, y: p.y - ts.size / 2, size: ts.size, color: ts.color, bold: ts.bold, bg: ts.bg })
       s.select({ kind: 't', id: o.id })
     } else {
-      const m = hitMark(p0, p)
+      const h = topHit(p0, p)
+      if (h?.kind === 't') {
+        const t2 = h.item; s.snapshot(); s.select({ kind: 't', id: t2.id })
+        useStore.setState({ tStyle: { color: t2.color, size: t2.size, bold: t2.bold, bg: t2.bg } })
+        dragRef.current = { kind: 't', id: t2.id, dx: p.x - t2.x, dy: p.y - t2.y, moved: false }; return
+      }
+      const m = h?.kind === 'm' ? h.item : null
       if (m) { s.snapshot(); s.select({ kind: 'm', id: m.id }); useStore.setState({ xStyle: { color: m.color, size: m.size, width: m.width } }); dragRef.current = { kind: 'm', id: m.id, dx: p.x - m.x, dy: p.y - m.y, moved: false }; return }
-      const sh = hitShape(p0, p, tol(), s.draftPathId)
+      const sh = h?.kind === 's' ? h.item : null
       if (sh) {
         s.snapshot(); s.select({ kind: 's', id: sh.id })
         useStore.setState({ dStyle: { ...s.dStyle, color: sh.color, width: sh.width, dash: !!sh.dash, ...(sh.type === 'rect' ? { fill: !!sh.fill } : { node: sh.node, arrow: !!sh.arrow }) } })
@@ -154,6 +192,13 @@ export default function CanvasView() {
   function move(p, cx, cy) {
     const s = useStore.getState()
     if (panRef.current) { const m = mainRef.current, P = panRef.current; m.scrollLeft = P.sl - (cx - P.cx); m.scrollTop = P.st - (cy - P.cy); return }
+    if (pathPress.current) { hoverRef.current = snapAt(p); draw(); return }
+    const ls = liveStroke.current
+    if (ls) {
+      const last = ls.pts[ls.pts.length - 1], minD = Math.max(1.5, ls.width / 6)
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= minD) { ls.pts.push({ x: p.x, y: p.y }); draw() }
+      return
+    }
     const dr = draftRectRef.current
     if (dr) { s.updateItem('s', dr.id, { w: p.x - dr.x, h: p.y - dr.y }); return }
     const d = dragRef.current; if (!d) return
@@ -171,6 +216,19 @@ export default function CanvasView() {
   function up() {
     const s = useStore.getState()
     panRef.current = null
+    if (pathPress.current) {
+      pathPress.current = false
+      const q = hoverRef.current; if (!q) return
+      if (!s.draftPathId) {
+        const d = s.dStyle
+        const o = s.addItem('s', { type: 'path', pts: [{ x: q.x, y: q.y }], color: d.color, width: d.width, dash: d.dash, node: d.node, arrow: d.arrow })
+        useStore.setState({ draftPathId: o.id, selected: null })
+      } else s.updateItem('s', s.draftPathId, (o) => ({ ...o, pts: [...o.pts, { x: q.x, y: q.y }] }))
+      if (touchMode.current) hoverRef.current = null
+      draw(); return
+    }
+    const ls = liveStroke.current
+    if (ls) { liveStroke.current = null; s.addItem('e', ls); draw(); return }
     const dr = draftRectRef.current
     if (dr) {
       draftRectRef.current = null
@@ -191,6 +249,8 @@ export default function CanvasView() {
   function cancelGesture() {
     const s = useStore.getState()
     panRef.current = null
+    if (pathPress.current) { pathPress.current = false; hoverRef.current = null }
+    if (liveStroke.current) { liveStroke.current = null; draw() }
     if (draftRectRef.current) { const id = draftRectRef.current.id; draftRectRef.current = null; s.patchPlan((pl) => ({ ...pl, shapes: pl.shapes.filter((x) => x.id !== id) }), false); s.dropSnapshot() }
     if (dragRef.current) { const moved = dragRef.current.moved; dragRef.current = null; if (moved) s.undo(); else s.dropSnapshot() }
   }
@@ -206,7 +266,7 @@ export default function CanvasView() {
     const s = useStore.getState(), p0 = s.plan(); if (!p0) return
     if (s.mode === 'path') { s.finishPath(); hoverRef.current = null; draw(); return }
     if (s.mode === 'rect') return
-    const t = hitText(p0, p); if (t) editText(t)
+    const t = layerUsable(p0, 'texts') ? hitText(p0, p) : null; if (t) editText(t)
   }
 
   /* ---------- pointeurs ---------- */
@@ -242,10 +302,16 @@ export default function CanvasView() {
     down(toImg(pd.cx, pd.cy), pd.onCanvas, pd.cx, pd.cy)
   }
 
+  // les mouvements sont traités une fois par image (60 i/s) pour rester fluide sur tablette
   function onPointerMove(e) {
+    if (ptrs.current.has(e.pointerId)) ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    moveQ.current = { pointerId: e.pointerId, pointerType: e.pointerType, clientX: e.clientX, clientY: e.clientY, target: e.target }
+    if (!moveRaf.current) moveRaf.current = requestAnimationFrame(() => { moveRaf.current = 0; const q = moveQ.current; moveQ.current = null; if (q) processMove(q) })
+  }
+  function flushMove() { if (moveRaf.current) { cancelAnimationFrame(moveRaf.current); moveRaf.current = 0; const q = moveQ.current; moveQ.current = null; if (q) processMove(q) } }
+  function processMove(e) {
     const main = mainRef.current, cv = cvRef.current
     if (!cv) return
-    if (ptrs.current.has(e.pointerId)) ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
     if (pinch.current && ptrs.current.size >= 2) {
       const [a, b] = [...ptrs.current.values()]
@@ -265,10 +331,10 @@ export default function CanvasView() {
     }
 
     const s = useStore.getState(), p = toImg(e.clientX, e.clientY)
-    if (s.draftPathId && e.pointerType !== 'touch') { hoverRef.current = snapPoint(s.plan(), p, 12 / s.zoom, s.draftPathId); draw() }
-    else if (hoverRef.current && !s.draftPathId) { hoverRef.current = null; draw() }
-
-    if (!ptrs.current.has(e.pointerId)) {   // survol à la souris : curseur des poignées
+    if (!ptrs.current.has(e.pointerId)) {   // survol (souris / stylet sans appui)
+      if (s.mode === 'path' && e.pointerType !== 'touch') { hoverRef.current = snapAt(p); draw() }
+      else if (hoverRef.current) { hoverRef.current = null; draw() }
+      if (s.mode === 'erase' && e.pointerType !== 'touch') { brushRef.current = { x: p.x, y: p.y, r: s.eStyle.width / 2 }; draw() }
       if (e.target === cv) { const rh = onRectHandle(p); cv.style.cursor = onTextHandle(p) ? 'nwse-resize' : rh ? HANDLE_CURSOR[rh.h.k] : '' }
       return
     }
@@ -276,6 +342,7 @@ export default function CanvasView() {
   }
 
   function onPointerUp(e) {
+    flushMove()
     const had = ptrs.current.delete(e.pointerId)
     if (!had) return
     if (pinch.current) { if (ptrs.current.size < 2) pinch.current = null; if (ptrs.current.size === 0) cancelGesture(); return }
@@ -296,14 +363,12 @@ export default function CanvasView() {
   }
 
   function onDoubleClick(e) { if (e.target === cvRef.current) doubleAt(toImg(e.clientX, e.clientY)) }
+  function onPointerLeave() { if (brushRef.current || (hoverRef.current && !useStore.getState().draftPathId)) { brushRef.current = null; if (!pathPress.current) hoverRef.current = null; draw() } }
   function onContextMenu(e) {
     e.preventDefault()
     const s = useStore.getState(), p0 = s.plan(); if (!p0 || e.target !== cvRef.current) return
     if (s.draftPathId) { s.finishPath(); hoverRef.current = null; return }
-    const p = toImg(e.clientX, e.clientY)
-    const t = hitText(p0, p); if (t) return s.removeItem('t', t.id)
-    const m = hitMark(p0, p); if (m) return s.removeItem('m', m.id)
-    const sh = hitShape(p0, p, tol()); if (sh) s.removeItem('s', sh.id)
+    const h = topHit(p0, toImg(e.clientX, e.clientY)); if (h) s.removeItem(h.kind, h.item.id)
   }
   useEffect(() => {
     const m = mainRef.current
@@ -315,11 +380,11 @@ export default function CanvasView() {
     return () => m.removeEventListener('wheel', onWheel)
   }, [zoomAt])
 
-  const cursor = { mark: 'crosshair', rect: 'crosshair', path: 'crosshair', text: 'text', move: 'grab' }[st.mode]
+  const cursor = { mark: 'crosshair', rect: 'crosshair', path: 'crosshair', text: 'text', move: 'grab', erase: 'none' }[st.mode]
   const cv = cvRef.current
   return (
     <main ref={mainRef}
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onPointerLeave={onPointerLeave}
       onDoubleClick={onDoubleClick} onContextMenu={onContextMenu}
       className="stage-grid relative h-full touch-none select-none overflow-auto overscroll-contain">
       <div className="inline-flex min-h-full min-w-full items-center justify-center p-3 pb-28 sm:p-8 sm:pb-24">

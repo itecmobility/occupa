@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Bold, Highlighter, SquareDashed, PaintBucket, MoveRight, X, Square, Trash2, MousePointerClick, PencilLine, Check } from 'lucide-react'
+import { Eraser, Bold, Highlighter, SquareDashed, PaintBucket, MoveRight, X, Square, Trash2, MousePointerClick, PencilLine, Check } from 'lucide-react'
 import { canvasApi } from './CanvasView'
 import { useStore } from './store'
 import { Button, ColorField, SizeField, Toggle, Switch, Field, Kbd } from './components/ui'
 import { PSign } from './TopBar'
-import { clearMarks, clearShapes, clearAll, stepTextSize } from './actions'
+import { clearMarks, clearShapes, clearStrokes, clearAll, stepTextSize } from './actions'
+import Layers from './Layers'
 
 const CTX = {
   mark: ['Marquer', 'Cliquez une place pour la marquer occupée. Cliquez un X pour l\'enlever.'],
@@ -15,6 +16,7 @@ const CTX = {
   rectSel: ['Rectangle sélectionné', 'Les réglages s\'appliquent à ce rectangle. Tirez les poignées pour l\'agrandir ou le réduire, glissez-le en mode Déplacer, Suppr pour le retirer.'],
   path: ['Circuit', 'Cliquez chaque point. Un nouveau circuit s\'accroche aux points existants. Double-clic, Entrée ou clic droit pour terminer.'],
   pathSel: ['Circuit sélectionné', 'Les réglages s\'appliquent à ce circuit. Glissez pour le déplacer, Suppr pour le retirer.'],
+  erase: ['Effaceur', 'Peignez en blanc sur le plan pour faire disparaître des places ou des éléments du dessin d\'origine. Ctrl+Z annule le dernier trait.'],
   move: ['Déplacer', 'Cliquez un X, un texte, un rectangle ou un circuit pour le sélectionner et le modifier.'],
 }
 const SW_X = ['#e00000', '#0f1f3d', '#f08c00', '#16a34a']
@@ -101,6 +103,17 @@ export default function Panel({ variant = 'side' }) {
             </>
           )}
 
+          {k === 'erase' && (
+            <Field label="Taille de l'effaceur">
+              <div className="flex items-center gap-3">
+                <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-sunken ring-1 ring-inset ring-line">
+                  <span className="rounded-full bg-white ring-1 ring-black/15" style={{ width: Math.max(4, Math.min(44, s.eStyle.width / 2.5)), height: Math.max(4, Math.min(44, s.eStyle.width / 2.5)) }} />
+                </span>
+                <div className="flex-1"><SizeField id="eWidth" value={s.eStyle.width} min={4} max={160} onChange={(v) => useStore.setState({ eStyle: { width: v } })} /></div>
+              </div>
+            </Field>
+          )}
+
           {k === 'move' && (
             <div className="flex items-center gap-3 rounded-xl border border-dashed border-line-strong p-4 text-[13px] text-muted">
               <MousePointerClick size={20} className="shrink-0" />Rien de sélectionné pour l'instant.
@@ -122,6 +135,7 @@ export default function Panel({ variant = 'side' }) {
       </AnimatePresence>
 
       <div className="mt-auto flex flex-col gap-5 border-t border-line px-5 py-5">
+        <Layers />
         <div className="flex flex-col gap-3">
           <h3 className="text-[13px] font-semibold">Image enregistrée</h3>
           {sheet && (
@@ -138,6 +152,7 @@ export default function Panel({ variant = 'side' }) {
           <h3 className="mb-1 text-[13px] font-semibold">Effacer</h3>
           <Button id="clearX" variant="danger-ghost" size="sm" className="justify-start" onClick={clearMarks}><X size={15} strokeWidth={2.6} />Les X</Button>
           <Button id="clearShapes" variant="danger-ghost" size="sm" className="justify-start" onClick={clearShapes}><Square size={15} />Les rectangles et circuits</Button>
+          <Button id="clearStrokes" variant="danger-ghost" size="sm" className="justify-start" onClick={clearStrokes}><Eraser size={15} />Les corrections de l'effaceur</Button>
           <Button id="clearAll" variant="danger-ghost" size="sm" className="justify-start" onClick={clearAll}><Trash2 size={15} />Tout le plan</Button>
         </div>
       </div>
